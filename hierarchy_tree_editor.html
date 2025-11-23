@@ -1,0 +1,3130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hierarchy Tree Editor (Standalone)</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #f5f5f5;
+        }
+
+        body.dragging {
+            cursor: move !important;
+        }
+
+        body.dragging * {
+            cursor: move !important;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Header */
+        #appHeader {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            flex-shrink: 0;
+        }
+
+        #headerLeft {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        #headerLogo {
+            font-size: 28px;
+        }
+
+        #headerTitle {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        #headerRight {
+            display: flex;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #0047AB;
+            background: white;
+            padding: 8px 20px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        #headerRight .lambda-a {
+            font-size: 24px;
+            font-weight: 900;
+            margin-right: 2px;
+        }
+
+        /* Body */
+        #appBody {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Footer */
+        #appFooter {
+            padding: 10px 20px;
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            font-size: 12px;
+            flex-shrink: 0;
+            border-top: 2px solid #34495e;
+        }
+
+        #appFooter strong {
+            color: #4CAF50;
+        }
+
+        /* Left Panel - File & Mapping */
+        #leftPanel {
+            width: 300px;
+            background: #ffffff;
+            border-right: 2px solid #ddd;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .collapsible-section {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .section-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            background: #f8f9fa;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .section-toggle:hover {
+            background: #e9ecef;
+        }
+
+        .section-toggle h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+            flex: 1;
+        }
+
+        .toggle-icon {
+            font-size: 12px;
+            transition: transform 0.2s;
+            color: #666;
+        }
+
+        .section-toggle.collapsed .toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .section-content {
+            padding: 15px 20px;
+            background: white;
+        }
+
+        .section-content.collapsed {
+            display: none;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button:active {
+            background: #3d8b40;
+        }
+
+        button.secondary {
+            background: #2196F3;
+        }
+
+        button.secondary:hover {
+            background: #0b7dda;
+        }
+
+        .mapping-group {
+            margin-bottom: 15px;
+        }
+
+        .mapping-group label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .mapping-group input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+
+        .mapping-group input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+        }
+
+        .status {
+            font-size: 12px;
+            color: #666;
+            padding: 8px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            margin-top: 10px;
+            word-wrap: break-word;
+        }
+
+        /* Middle Panel - Tree & Orphans */
+        #middlePanel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #f8f9fa;
+            overflow: hidden;
+        }
+
+        #middleHeader {
+            display: flex;
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+            padding: 12px 20px;
+            gap: 20px;
+            align-items: center;
+        }
+
+        #middleHeader h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+        }
+
+        #middleContent {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: white;
+        }
+
+        #treeSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: white;
+        }
+
+        #orphansSection {
+            width: 0;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: white;
+            border-left: 2px solid #e0e0e0;
+        }
+
+        #orphansSection.visible {
+            display: flex;
+            width: 350px;
+        }
+
+        .section-header {
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #searchBar {
+            padding: 16px 20px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #searchBar input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        #searchBar input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        #searchBar button {
+            width: auto;
+            padding: 10px 16px;
+            margin: 0;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        #treeView {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        #orphansList {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .tree-node {
+            padding: 10px 14px;
+            margin: 3px 0;
+            cursor: pointer;
+            border-radius: 6px;
+            user-select: none;
+            transition: all 0.15s;
+            font-size: 14px;
+            color: #333;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tree-node.dragging {
+            opacity: 0.5;
+            cursor: move;
+        }
+
+        .tree-node.drag-over {
+            background: #c8e6c9;
+            border-left-color: #4CAF50;
+            box-shadow: 0 0 0 2px #4CAF50;
+        }
+
+        .drop-zone {
+            padding: 20px;
+            margin: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .drop-zone.drag-over {
+            background: #c8e6c9;
+            border-color: #4CAF50;
+            color: #2e7d32;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        .tree-node-toggle {
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #666;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            border-radius: 3px;
+        }
+
+        .tree-node-toggle:hover {
+            color: #333;
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .tree-node-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        .tree-node-toggle.empty {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .tree-node-label {
+            flex: 1;
+        }
+
+        .tree-node:hover {
+            background: #e8f5e9;
+            border-left-color: #66bb6a;
+            transform: translateX(2px);
+        }
+
+        .tree-node.selected {
+            background: #4CAF50;
+            color: white;
+            font-weight: 500;
+            border-left-color: #2e7d32;
+        }
+
+        .tree-node.selected .tree-node-toggle {
+            color: white;
+        }
+
+        .tree-node.highlight {
+            background: #fff9c4;
+            border-left-color: #fbc02d;
+        }
+
+        .tree-node.selected.highlight {
+            background: #388e3c;
+            border-left-color: #1b5e20;
+        }
+
+        .tree-node.newly-created {
+            animation: pulseGreen 2s ease-in-out;
+        }
+
+        @keyframes pulseGreen {
+            0%, 100% { background: #4CAF50; }
+            50% { background: #66bb6a; }
+        }
+
+        .orphan-node.newly-created {
+            animation: pulseOrange 2s ease-in-out;
+        }
+
+        @keyframes pulseOrange {
+            0%, 100% { background: #ff9800; }
+            50% { background: #ffa726; }
+        }
+
+        .tree-children {
+            margin-left: 28px;
+            border-left: 2px solid #e8e8e8;
+            padding-left: 12px;
+            margin-top: 2px;
+        }
+
+        .orphan-node {
+            padding: 12px 16px;
+            margin: 6px 0;
+            cursor: pointer;
+            border-radius: 6px;
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            transition: all 0.15s;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .orphan-node.dragging {
+            opacity: 0.5;
+            cursor: move;
+        }
+
+        .orphan-node:hover {
+            background: #ffe0b2;
+            transform: translateX(2px);
+        }
+
+        .orphan-node.selected {
+            background: #ff9800;
+            color: white;
+            font-weight: 500;
+            border-left-color: #f57c00;
+        }
+
+        /* Right Panel - Details */
+        #rightPanel {
+            width: 400px;
+            background: #ffffff;
+            border-left: 2px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        #detailsHeader {
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+        }
+
+        #detailsContent {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .detail-row {
+            margin-bottom: 18px;
+        }
+
+        .detail-row label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .detail-row input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .detail-row input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #aaa;
+            padding: 50px 20px;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .info-badge {
+            display: inline-block;
+            background: #2196F3;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .warning-badge {
+            display: inline-block;
+            background: #ff9800;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        /* Quality Report Styles */
+        .quality-report {
+            margin-top: 15px;
+            font-size: 13px;
+        }
+
+        .quality-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 4px solid #ddd;
+        }
+
+        .quality-section.critical {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+
+        .quality-section.warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+        }
+
+        .quality-section.info {
+            background: #e3f2fd;
+            border-left-color: #2196F3;
+        }
+
+        .quality-section.success {
+            background: #e8f5e9;
+            border-left-color: #4CAF50;
+        }
+
+        .quality-header {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quality-count {
+            display: inline-block;
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+
+        .quality-item {
+            margin: 6px 0;
+            padding: 6px 8px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quality-item:hover {
+            background: rgba(0,0,0,0.05);
+            transform: translateX(2px);
+        }
+
+        .quality-item-clickable {
+            color: #2196F3;
+            text-decoration: underline;
+        }
+
+        .quality-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .quality-stat {
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .quality-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #4CAF50;
+        }
+
+        .quality-stat-label {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .quality-action-btn {
+            display: inline-block;
+            padding: 4px 10px;
+            margin: 4px 4px 4px 0;
+            background: #2196F3;
+            color: white;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .quality-action-btn:hover {
+            background: #0b7dda;
+        }
+
+        .quality-action-btn.danger {
+            background: #f44336;
+        }
+
+        .quality-action-btn.danger:hover {
+            background: #d32f2f;
+        }
+
+        /* Quality Report Styles */
+        .quality-report {
+            margin-top: 15px;
+            font-size: 12px;
+        }
+
+        .quality-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+
+        .quality-section-header {
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quality-section-header .icon {
+            font-size: 16px;
+        }
+
+        .quality-section-header .count {
+            margin-left: auto;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .quality-section.critical {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+
+        .quality-section.critical .count {
+            background: #f44336;
+            color: white;
+        }
+
+        .quality-section.warning {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .quality-section.warning .count {
+            background: #ff9800;
+            color: white;
+        }
+
+        .quality-section.info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+
+        .quality-section.info .count {
+            background: #2196f3;
+            color: white;
+        }
+
+        .quality-section.success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+        }
+
+        .quality-issue {
+            margin: 6px 0;
+            padding: 6px 8px;
+            background: white;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quality-issue:hover {
+            background: #f5f5f5;
+            transform: translateX(2px);
+        }
+
+        .quality-issue-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .quality-issue-detail {
+            color: #666;
+            margin-top: 2px;
+            font-size: 10px;
+        }
+
+        .quality-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 11px;
+        }
+
+        .quality-stat-label {
+            color: #666;
+        }
+
+        .quality-stat-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .quality-score {
+            text-align: center;
+            padding: 15px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .quality-score-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 5px 0;
+        }
+
+        .quality-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .quality-actions button {
+            flex: 1;
+            font-size: 11px;
+            padding: 6px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <div id="appHeader">
+            <div id="headerLeft">
+                <div id="headerLogo">🌳</div>
+                <div id="headerTitle">Hierarchy Tree Editor</div>
+            </div>
+            <div id="headerRight">
+                <span class="lambda-a">Λ</span> LAMBDA TECHNOLOGIES
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div id="appBody">
+        <!-- Left Panel: File & Mapping -->
+        <div id="leftPanel">
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>1. Load Excel File</h3>
+                </div>
+                <div class="section-content">
+                    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+                    <button onclick="document.getElementById('fileInput').click()">Load Excel</button>
+                    <div id="fileStatus" class="status">No file loaded</div>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>2. Map Columns</h3>
+                </div>
+                <div class="section-content">
+                    <div class="mapping-group">
+                        <label>Node ID:</label>
+                        <select id="nodeIdSelect">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="mapping-group">
+                        <label>Parent ID:</label>
+                        <select id="parentIdSelect">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <div class="mapping-group">
+                        <label>Label:</label>
+                        <select id="labelSelect">
+                            <option value="">-- Select --</option>
+                        </select>
+                    </div>
+                    <button class="secondary" onclick="autoMap()">Auto Map</button>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>3. Build Tree</h3>
+                </div>
+                <div class="section-content">
+                    <button onclick="buildHierarchyAndRender()">Build Tree</button>
+                    <div id="buildStatus" class="status">Not built yet</div>
+                    <div class="status" style="margin-top: 5px; font-size: 11px; color: #666;">
+                        <strong>Note:</strong> Roots have children. Orphans have missing parents or no connections.
+                    </div>
+                    <div class="status" style="margin-top: 5px; font-size: 11px; color: #4CAF50;">
+                        <strong>💡 Tip:</strong> Drag & drop nodes to reparent them!
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>4. Add New Record</h3>
+                </div>
+                <div class="section-content">
+                    <div class="mapping-group">
+                        <label>Node ID:</label>
+                        <input type="text" id="newNodeId" placeholder="Enter unique ID">
+                    </div>
+                    <div class="mapping-group">
+                        <label>Parent ID (optional):</label>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="text" id="newParentId" placeholder="Leave blank for root" style="flex: 1;">
+                            <button onclick="useSelectedAsParent()" class="secondary" style="width: auto; padding: 8px 12px; margin: 0; font-size: 11px;" title="Use selected node as parent">📌</button>
+                        </div>
+                    </div>
+                    <div class="mapping-group">
+                        <label>Label/Description:</label>
+                        <input type="text" id="newLabel" placeholder="Enter description">
+                    </div>
+                    <button onclick="createNewRecord()" style="background: #9c27b0;">Create Record</button>
+                    <div class="status" style="margin-top: 5px; font-size: 11px; color: #666;">
+                        <strong>Tip:</strong> Fill other fields in the details panel after creation
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>5. Export</h3>
+                </div>
+                <div class="section-content">
+                    <button onclick="exportToExcel()" style="background: #9c27b0;">Export Modified Excel</button>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>6. Data Quality Report</h3>
+                </div>
+                <div class="section-content">
+                    <button onclick="analyzeDataQuality()" style="background: #ff5722;">Run Analysis</button>
+                    <div id="qualityReport" class="quality-report">
+                        <div class="status">Click "Run Analysis" to check data quality</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapsible-section">
+                <div class="section-toggle collapsed" onclick="toggleSection(this)">
+                    <span class="toggle-icon">▼</span>
+                    <h3>7. Help & Methodologies</h3>
+                </div>
+                <div class="section-content collapsed">
+                    <div style="font-size: 12px; line-height: 1.6; color: #555;">
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #4CAF50; font-size: 13px;">📚 How This Tool Works</strong>
+                            <p style="margin: 8px 0;">This tool helps you visualize and edit hierarchical data from Excel files. It uses three key fields:</p>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Node ID:</strong> Unique identifier for each record</li>
+                                <li><strong>Parent ID:</strong> Links to another Node ID (creates the hierarchy)</li>
+                                <li><strong>Label:</strong> Descriptive name for display</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #2196F3; font-size: 13px;">🌳 Tree Structure</strong>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Root Nodes:</strong> Have no parent but have children</li>
+                                <li><strong>Child Nodes:</strong> Have a valid parent ID</li>
+                                <li><strong>Orphans:</strong> Either have a missing parent ID or are completely isolated (no parent, no children)</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #9c27b0; font-size: 13px;">🎯 Key Features</strong>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Auto-Map:</strong> Automatically detects column mappings</li>
+                                <li><strong>Drag & Drop:</strong> Reparent nodes by dragging them (preserves scroll position!)</li>
+                                <li><strong>Independent Search:</strong> Separate search bars for Tree and Orphans</li>
+                                <li><strong>Live Search:</strong> Results update as you type (300ms delay)</li>
+                                <li><strong>Add Records:</strong> Create new nodes in the tree</li>
+                                <li><strong>Edit Details:</strong> Modify any field in the right panel</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #ff9800; font-size: 13px;">🔎 Search Functionality</strong>
+                            <p style="margin: 8px 0;">Two independent search systems:</p>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Tree Search:</strong> Filters only the tree view, shows matching nodes and their ancestors</li>
+                                <li><strong>Orphan Search:</strong> Filters only orphans independently</li>
+                                <li><strong>Regex Support:</strong> Use patterns like "^ABC" or ".*test.*"</li>
+                                <li><strong>All Fields:</strong> Searches Node ID, Label, and all other columns</li>
+                                <li><strong>Live Updates:</strong> Results appear as you type</li>
+                                <li><strong>Clear Button:</strong> Quickly reset each search independently</li>
+                            </ul>
+                            <p style="margin: 8px 0; padding: 8px; background: #e3f2fd; border-radius: 4px; font-size: 11px;">
+                                <strong>💡 Tip:</strong> Use both searches simultaneously to find related nodes across tree and orphans!
+                            </p>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #8bc34a; font-size: 13px;">🎯 Drag & Drop Enhanced</strong>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Scroll Preservation:</strong> Tree view stays in place when moving nodes</li>
+                                <li><strong>Auto-Scroll:</strong> Smoothly scrolls to show moved node if outside view</li>
+                                <li><strong>From Orphans:</strong> Drag orphans to tree to assign parents</li>
+                                <li><strong>Within Tree:</strong> Drag any node to reparent it</li>
+                                <li><strong>To Root:</strong> Drop on "Drop here to make root" zone</li>
+                                <li><strong>Visual Feedback:</strong> Highlight on hover, validation on drop</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #ff5722; font-size: 13px;">🔍 Quality Analysis</strong>
+                            <p style="margin: 8px 0;">The Data Quality Report checks for:</p>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Duplicates:</strong> Multiple nodes with same ID</li>
+                                <li><strong>Circular References:</strong> Nodes that reference themselves</li>
+                                <li><strong>Missing IDs:</strong> Rows without Node IDs</li>
+                                <li><strong>Orphans:</strong> Nodes with invalid parent references</li>
+                                <li><strong>Whitespace:</strong> IDs with extra spaces (auto-fixable)</li>
+                                <li><strong>Empty Labels:</strong> Nodes without descriptions</li>
+                            </ul>
+                            <p style="margin: 8px 0; padding: 8px; background: #fff3e0; border-radius: 4px; font-size: 11px;">
+                                <strong>💡 Tip:</strong> Run analysis before exporting to ensure data quality!
+                            </p>
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <strong style="color: #f44336; font-size: 13px;">⚠️ Best Practices</strong>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li>Use unique, meaningful Node IDs</li>
+                                <li>Avoid spaces in IDs (use underscores or hyphens)</li>
+                                <li>Keep parent-child relationships simple</li>
+                                <li>Fix critical issues (duplicates, circular refs) first</li>
+                                <li>Export frequently to save your changes</li>
+                            </ul>
+                        </div>
+
+                        <div style="margin-bottom: 0;">
+                            <strong style="color: #666; font-size: 13px;">⌨️ Keyboard Shortcuts & Tips</strong>
+                            <ul style="margin: 8px 0 8px 20px; padding: 0;">
+                                <li><strong>Enter:</strong> Submit forms (search, new record)</li>
+                                <li><strong>Type in search:</strong> Live results appear automatically</li>
+                                <li><strong>Click + Drag:</strong> Move nodes to new parents</li>
+                                <li><strong>Expand/Collapse All:</strong> Buttons to manage tree visibility</li>
+                                <li>📌 Button: Use selected node as parent for new records</li>
+                            </ul>
+                            <p style="margin: 8px 0; padding: 8px; background: #f3e5f5; border-radius: 4px; font-size: 11px;">
+                                <strong>🚀 Pro Tip:</strong> Search tree and orphans simultaneously to quickly identify and fix broken relationships!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Panel: Tree & Orphans -->
+        <div id="middlePanel">
+            <div id="middleHeader">
+                <h2>Hierarchy Tree</h2>
+                <span id="rootCount" class="info-badge">0 roots</span>
+                <h2 style="margin-left: auto;">Orphans</h2>
+                <span id="orphanCount" class="warning-badge">0</span>
+            </div>
+            <div id="middleContent">
+                <!-- Tree Section -->
+                <div id="treeSection">
+                    <div id="searchBar">
+                        <input type="text" id="searchInput" placeholder="Filter tree as you type (regex supported)...">
+                        <button onclick="performSearch()">Search</button>
+                        <button onclick="clearSearch()" class="secondary">Clear</button>
+                        <button onclick="expandAll()" class="secondary" title="Expand all nodes">Expand All</button>
+                        <button onclick="collapseAll()" class="secondary" title="Collapse all nodes">Collapse All</button>
+                    </div>
+                    <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0; font-size: 11px; color: #666;">
+                        <strong>Search tip:</strong> Searches Asset Number, Description, and all other fields
+                    </div>
+                    <div id="treeView">
+                        <div class="empty-state">Load a file and build the tree to get started</div>
+                    </div>
+                </div>
+
+                <!-- Orphans Section -->
+                <div id="orphansSection">
+                    <div id="orphanSearchBar" style="display: flex; gap: 8px; padding: 10px; background: #fff; border-bottom: 1px solid #e0e0e0;">
+                        <input type="text" id="orphanSearchInput" placeholder="Filter orphans as you type..." style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button onclick="performOrphanSearch()" style="padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
+                        <button onclick="clearOrphanSearch()" class="secondary" style="padding: 8px 16px;">Clear</button>
+                    </div>
+                    <div id="orphansList">
+                        <div class="empty-state">No orphans</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Details -->
+        <div id="rightPanel">
+            <div id="detailsHeader">Record Details</div>
+            <div id="detailsContent">
+                <div class="empty-state">Select a node to view details</div>
+            </div>
+        </div>
+        </div>
+        <!-- End appBody -->
+
+        <!-- Footer -->
+        <div id="appFooter">
+            <strong>© 2025 JM eAM Consulting LLC. All Rights Reserved.</strong> | 
+            Email: <a href="mailto:jmeamconsulting@gmail.com" style="color: #4CAF50; text-decoration: none;">jmeamconsulting@gmail.com</a> | 
+            Mobile: <strong>803.226.1039</strong>
+        </div>
+    </div>
+    <!-- End app -->
+
+    <script>
+        // Global state
+        let rawRows = [];
+        let columns = [];
+        let fileName = '';
+        let nodeIdField = '';
+        let parentIdField = '';
+        let labelField = '';
+        let nodesById = new Map();
+        let roots = [];
+        let orphanNodes = [];
+        let selectedNode = null;
+        let searchMatches = new Set();
+        let orphanSearchMatches = new Set(); // Separate search for orphans
+        let expandedNodes = new Set(); // Track which nodes are expanded
+        let draggedNode = null; // Track the node being dragged
+
+        // Toggle collapsible sections
+        function toggleSection(toggle) {
+            toggle.classList.toggle('collapsed');
+            const content = toggle.nextElementSibling;
+            content.classList.toggle('collapsed');
+        }
+
+        // File handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileName = file.name;
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+
+                    if (jsonData.length === 0) {
+                        alert('No data found in the Excel file');
+                        return;
+                    }
+
+                    rawRows = jsonData;
+                    columns = Object.keys(jsonData[0]);
+
+                    populateMapping();
+                    updateFileStatus();
+                } catch (error) {
+                    alert('Error reading Excel file: ' + error.message);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        function updateFileStatus() {
+            document.getElementById('fileStatus').textContent = 
+                `Loaded: ${fileName} (${rawRows.length} rows, ${columns.length} columns)`;
+        }
+
+        function populateMapping() {
+            const nodeSelect = document.getElementById('nodeIdSelect');
+            const parentSelect = document.getElementById('parentIdSelect');
+            const labelSelect = document.getElementById('labelSelect');
+
+            // Clear existing options
+            nodeSelect.innerHTML = '<option value="">-- Select --</option>';
+            parentSelect.innerHTML = '<option value="">-- Select --</option>';
+            labelSelect.innerHTML = '<option value="">-- Select --</option>';
+
+            // Add column options
+            columns.forEach(col => {
+                nodeSelect.add(new Option(col, col));
+                parentSelect.add(new Option(col, col));
+                labelSelect.add(new Option(col, col));
+            });
+        }
+
+        function autoMap() {
+            if (columns.length === 0) {
+                alert('Please load a file first');
+                return;
+            }
+
+            // Auto-detect Node ID
+            const nodeIdKeywords = ['id', 'asset', 'node', 'number'];
+            const nodeIdCol = columns.find(col => 
+                nodeIdKeywords.some(kw => col.toLowerCase().includes(kw) && !col.toLowerCase().includes('parent'))
+            );
+
+            // Auto-detect Parent ID
+            const parentIdKeywords = ['parent'];
+            const parentIdCol = columns.find(col => 
+                parentIdKeywords.some(kw => col.toLowerCase().includes(kw))
+            );
+
+            // Auto-detect Label
+            const labelKeywords = ['desc', 'label', 'name', 'title'];
+            const labelCol = columns.find(col => 
+                labelKeywords.some(kw => col.toLowerCase().includes(kw))
+            );
+
+            // Set selections
+            if (nodeIdCol) {
+                document.getElementById('nodeIdSelect').value = nodeIdCol;
+                nodeIdField = nodeIdCol;
+            }
+            if (parentIdCol) {
+                document.getElementById('parentIdSelect').value = parentIdCol;
+                parentIdField = parentIdCol;
+            }
+            if (labelCol) {
+                document.getElementById('labelSelect').value = labelCol;
+                labelField = labelCol;
+            }
+
+            if (nodeIdCol && parentIdCol && labelCol) {
+                alert('Auto-mapped successfully!\nNode ID: ' + nodeIdCol + '\nParent ID: ' + parentIdCol + '\nLabel: ' + labelCol);
+            } else {
+                alert('Partial auto-map. Please verify the mappings.');
+            }
+        }
+
+        function sanitizeId(val) {
+            if (val === null || val === undefined || val === '') {
+                return null;
+            }
+
+            let str = String(val);
+            
+            // Remove Unicode format characters
+            str = str.replace(/[\u200E\u200F\u202A-\u202E\u00A0]/g, '');
+            
+            // Trim whitespace
+            str = str.trim();
+
+            return str === '' ? null : str;
+        }
+
+        function buildHierarchyAndRender() {
+            // Get field mappings
+            nodeIdField = document.getElementById('nodeIdSelect').value;
+            parentIdField = document.getElementById('parentIdSelect').value;
+            labelField = document.getElementById('labelSelect').value;
+
+            if (!nodeIdField || !parentIdField || !labelField) {
+                alert('Please map all three fields (Node ID, Parent ID, Label)');
+                return;
+            }
+
+            if (rawRows.length === 0) {
+                alert('Please load a file first');
+                return;
+            }
+
+            // Reset structures
+            nodesById.clear();
+            roots = [];
+            orphanNodes = [];
+            searchMatches.clear();
+            
+            // Save current expanded state
+            const previouslyExpanded = new Set(expandedNodes);
+
+            // First pass: create nodes
+            rawRows.forEach((row, index) => {
+                const id = sanitizeId(row[nodeIdField]);
+                const parentId = sanitizeId(row[parentIdField]);
+                const label = row[labelField] || '';
+
+                if (!id) {
+                    return; // Skip rows with no ID
+                }
+
+                const node = {
+                    id: id,
+                    parentId: parentId,
+                    label: label,
+                    row: row,
+                    rowIndex: index,
+                    children: []
+                };
+
+                nodesById.set(id, node);
+            });
+
+            // Second pass: build relationships
+            nodesById.forEach(node => {
+                if (node.parentId) {
+                    const parent = nodesById.get(node.parentId);
+                    if (parent) {
+                        parent.children.push(node);
+                    } else {
+                        // Parent ID doesn't exist = orphan
+                        orphanNodes.push(node);
+                    }
+                }
+                // Don't categorize nodes without parents yet - wait until after relationships are built
+            });
+
+            // Third pass: categorize nodes with no parent
+            // Root = no parent AND has children
+            // Orphan = no parent AND has no children (isolated node)
+            nodesById.forEach(node => {
+                if (!node.parentId) {
+                    if (node.children.length > 0) {
+                        // Has children - it's a root
+                        roots.push(node);
+                    } else {
+                        // No children - it's an orphan (isolated node)
+                        orphanNodes.push(node);
+                    }
+                }
+            });
+
+            // Sort children for consistent display
+            function sortChildren(node) {
+                node.children.sort((a, b) => a.id.localeCompare(b.id));
+                node.children.forEach(sortChildren);
+            }
+            roots.sort((a, b) => a.id.localeCompare(b.id));
+            roots.forEach(sortChildren);
+
+            // Restore expanded state, or expand all if this is the first build
+            if (previouslyExpanded.size > 0) {
+                expandedNodes = new Set(previouslyExpanded);
+            } else {
+                // First build - expand all nodes by default
+                expandedNodes.clear();
+                nodesById.forEach(node => {
+                    if (node.children.length > 0) {
+                        expandedNodes.add(node.id);
+                    }
+                });
+            }
+
+            // Update status
+            const totalInTree = nodesById.size - orphanNodes.length;
+            document.getElementById('buildStatus').textContent = 
+                `Built: ${roots.length} roots, ${totalInTree} nodes in tree, ${orphanNodes.length} orphans`;
+
+            // Render
+            renderTree();
+            renderOrphans();
+        }
+
+        function renderTree() {
+            const treeView = document.getElementById('treeView');
+            treeView.innerHTML = '';
+
+            // Add drop zone for making nodes into roots
+            const dropZone = document.createElement('div');
+            dropZone.className = 'drop-zone';
+            dropZone.textContent = '📁 Drop here to make a root node (no parent)';
+            
+            // Drop zone handlers
+            dropZone.addEventListener('dragover', (e) => {
+                if (draggedNode) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            });
+            
+            dropZone.addEventListener('dragenter', (e) => {
+                if (draggedNode) {
+                    dropZone.classList.add('drag-over');
+                }
+            });
+            
+            dropZone.addEventListener('dragleave', (e) => {
+                if (e.target === dropZone) {
+                    dropZone.classList.remove('drag-over');
+                }
+            });
+            
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+                
+                if (draggedNode) {
+                    // Make this node a root by removing its parent
+                    reparentNode(draggedNode.id, null);
+                }
+            });
+            
+            treeView.appendChild(dropZone);
+
+            // If we have search matches, only show matching nodes and their ancestors
+            const isFiltering = searchMatches.size > 0;
+
+            let visibleRootCount = 0;
+            roots.forEach(root => {
+                if (isFiltering) {
+                    // Only render this root if it or any descendant matches
+                    if (shouldShowNode(root)) {
+                        renderNode(root, treeView, isFiltering);
+                        visibleRootCount++;
+                    }
+                } else {
+                    renderNode(root, treeView, isFiltering);
+                    visibleRootCount++;
+                }
+            });
+
+            // Update root count badge
+            document.getElementById('rootCount').textContent = isFiltering
+                ? `${visibleRootCount}/${roots.length} roots`
+                : `${roots.length} roots`;
+
+            if (roots.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'empty-state';
+                emptyMsg.textContent = 'No root nodes found';
+                treeView.appendChild(emptyMsg);
+                return;
+            }
+
+            if (isFiltering && visibleRootCount === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'empty-state';
+                emptyMsg.textContent = 'No matches found';
+                treeView.appendChild(emptyMsg);
+            }
+        }
+
+        function shouldShowNode(node) {
+            // Show if this node matches
+            if (searchMatches.has(node.id)) {
+                return true;
+            }
+            // Show if any descendant matches
+            return node.children.some(child => shouldShowNode(child));
+        }
+
+        // Check if a node is a descendant of another (prevents circular references)
+        function isDescendant(potentialDescendant, ancestor) {
+            if (!ancestor) return false;
+            
+            for (const child of ancestor.children) {
+                if (child.id === potentialDescendant.id) {
+                    return true;
+                }
+                if (isDescendant(potentialDescendant, child)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Handle reparenting a node
+        function reparentNode(draggedNodeId, newParentId) {
+            const draggedNode = nodesById.get(draggedNodeId);
+            if (!draggedNode) return;
+
+            // Don't allow dropping onto itself
+            if (draggedNodeId === newParentId) {
+                alert('Cannot drop a node onto itself');
+                return;
+            }
+
+            // Don't allow dropping onto a descendant (would create circular reference)
+            const newParent = newParentId ? nodesById.get(newParentId) : null;
+            if (newParent && isDescendant(newParent, draggedNode)) {
+                alert('Cannot drop a node onto its own descendant (would create circular reference)');
+                return;
+            }
+
+            // Store old parent for messaging
+            const oldParentId = draggedNode.parentId || '(none)';
+
+            // Save scroll position before rebuild
+            const treeView = document.getElementById('treeView');
+            const scrollPosition = treeView.scrollTop;
+
+            // Update the parent ID in the raw data
+            draggedNode.row[parentIdField] = newParentId || '';
+            rawRows[draggedNode.rowIndex][parentIdField] = newParentId || '';
+
+            // Rebuild the hierarchy
+            buildHierarchyAndRender();
+
+            // Restore scroll position after rebuild
+            requestAnimationFrame(() => {
+                treeView.scrollTop = scrollPosition;
+                
+                // Optionally scroll the moved node into view if it's not visible
+                // This helps show where the node was moved to
+                const movedNodeElement = treeView.querySelector(`[data-node-id="${draggedNodeId}"]`);
+                if (movedNodeElement) {
+                    const rect = movedNodeElement.getBoundingClientRect();
+                    const containerRect = treeView.getBoundingClientRect();
+                    
+                    // Check if node is outside visible area
+                    if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+                        movedNodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            });
+
+            // Show success message
+            const newParentName = newParentId ? newParentId : '(root)';
+            document.getElementById('buildStatus').textContent = 
+                `Moved "${draggedNodeId}" from "${oldParentId}" to "${newParentName}"`;
+
+            // Try to reselect the node
+            const updatedNode = nodesById.get(draggedNodeId);
+            if (updatedNode) {
+                selectNode(updatedNode);
+            }
+        }
+
+        function renderNode(node, container, isFiltering) {
+            const nodeDiv = document.createElement('div');
+            
+            const nodeLabel = document.createElement('div');
+            nodeLabel.className = 'tree-node';
+            
+            // Make node draggable
+            nodeLabel.draggable = true;
+            nodeLabel.setAttribute('data-node-id', node.id);
+            
+            // Drag start
+            nodeLabel.addEventListener('dragstart', (e) => {
+                draggedNode = node;
+                nodeLabel.classList.add('dragging');
+                document.body.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', node.id);
+            });
+            
+            // Drag end
+            nodeLabel.addEventListener('dragend', (e) => {
+                nodeLabel.classList.remove('dragging');
+                document.body.classList.remove('dragging');
+                draggedNode = null;
+                // Remove drag-over class from all nodes
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            });
+            
+            // Drag over (allow drop)
+            nodeLabel.addEventListener('dragover', (e) => {
+                if (draggedNode && draggedNode.id !== node.id) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }
+            });
+            
+            // Drag enter (visual feedback)
+            nodeLabel.addEventListener('dragenter', (e) => {
+                if (draggedNode && draggedNode.id !== node.id) {
+                    nodeLabel.classList.add('drag-over');
+                }
+            });
+            
+            // Drag leave (remove visual feedback)
+            nodeLabel.addEventListener('dragleave', (e) => {
+                // Only remove if we're actually leaving this element
+                if (e.target === nodeLabel) {
+                    nodeLabel.classList.remove('drag-over');
+                }
+            });
+            
+            // Drop
+            nodeLabel.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                nodeLabel.classList.remove('drag-over');
+                
+                if (draggedNode && draggedNode.id !== node.id) {
+                    // Reparent the dragged node to this node
+                    reparentNode(draggedNode.id, node.id);
+                }
+            });
+            
+            // Add expand/collapse toggle
+            const toggle = document.createElement('span');
+            toggle.className = 'tree-node-toggle';
+            
+            // When filtering, only show toggle if node has matching children
+            const visibleChildren = isFiltering 
+                ? node.children.filter(child => shouldShowNode(child))
+                : node.children;
+            
+            if (visibleChildren.length > 0) {
+                const isExpanded = expandedNodes.has(node.id);
+                toggle.textContent = '▶';
+                toggle.classList.toggle('expanded', isExpanded);
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    toggleNode(node.id);
+                };
+            } else {
+                toggle.classList.add('empty');
+            }
+            
+            // Add label text
+            const labelText = document.createElement('span');
+            labelText.className = 'tree-node-label';
+            labelText.textContent = `${node.id} – ${node.label}`;
+            
+            nodeLabel.appendChild(toggle);
+            nodeLabel.appendChild(labelText);
+            
+            // Set selection state
+            if (selectedNode && selectedNode.id === node.id) {
+                nodeLabel.classList.add('selected');
+            }
+
+            if (searchMatches.has(node.id)) {
+                nodeLabel.classList.add('highlight');
+            }
+            
+            // Click handler for selecting node (but not on toggle)
+            labelText.onclick = () => selectNode(node);
+
+            nodeDiv.appendChild(nodeLabel);
+
+            // Render children only if expanded
+            if (visibleChildren.length > 0 && expandedNodes.has(node.id)) {
+                const childrenDiv = document.createElement('div');
+                childrenDiv.className = 'tree-children';
+                visibleChildren.forEach(child => {
+                    renderNode(child, childrenDiv, isFiltering);
+                });
+                nodeDiv.appendChild(childrenDiv);
+            }
+
+            container.appendChild(nodeDiv);
+        }
+
+        function toggleNode(nodeId) {
+            if (expandedNodes.has(nodeId)) {
+                expandedNodes.delete(nodeId);
+            } else {
+                expandedNodes.add(nodeId);
+            }
+            renderTree();
+        }
+
+        function renderOrphans() {
+            const orphansList = document.getElementById('orphansList');
+            const orphansSection = document.getElementById('orphansSection');
+            const orphanCount = document.getElementById('orphanCount');
+
+            // Use orphan-specific search if active, otherwise show all orphans
+            const isOrphanFiltering = orphanSearchMatches.size > 0;
+            const visibleOrphans = isOrphanFiltering 
+                ? orphanNodes.filter(node => orphanSearchMatches.has(node.id))
+                : orphanNodes;
+
+            // Update count display
+            if (isOrphanFiltering) {
+                orphanCount.textContent = `${visibleOrphans.length}/${orphanNodes.length}`;
+            } else {
+                orphanCount.textContent = orphanNodes.length;
+            }
+
+            if (orphanNodes.length === 0) {
+                orphansList.innerHTML = '<div class="empty-state">No orphans</div>';
+                orphansSection.classList.remove('visible');
+                return;
+            }
+
+            orphansSection.classList.add('visible');
+            orphansList.innerHTML = '';
+
+            if (visibleOrphans.length === 0 && isOrphanFiltering) {
+                orphansList.innerHTML = '<div class="empty-state">No matching orphans</div>';
+                return;
+            }
+
+            // Sort orphans by ID for easier navigation
+            const sortedOrphans = [...visibleOrphans].sort((a, b) => a.id.localeCompare(b.id));
+
+            sortedOrphans.forEach(node => {
+                const orphanDiv = document.createElement('div');
+                orphanDiv.className = 'orphan-node';
+                orphanDiv.textContent = `${node.id} – ${node.label}`;
+                
+                // Make orphan draggable
+                orphanDiv.draggable = true;
+                orphanDiv.setAttribute('data-node-id', node.id);
+                
+                // Drag start
+                orphanDiv.addEventListener('dragstart', (e) => {
+                    draggedNode = node;
+                    orphanDiv.classList.add('dragging');
+                    document.body.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', node.id);
+                });
+                
+                // Drag end
+                orphanDiv.addEventListener('dragend', (e) => {
+                    orphanDiv.classList.remove('dragging');
+                    document.body.classList.remove('dragging');
+                    draggedNode = null;
+                    // Remove drag-over class from all nodes
+                    document.querySelectorAll('.drag-over').forEach(el => {
+                        el.classList.remove('drag-over');
+                    });
+                });
+                
+                // Add tooltip explaining why it's an orphan
+                if (!node.parentId) {
+                    orphanDiv.title = `Orphan: No parent and no children (isolated node)\nDrag to tree to assign a parent`;
+                } else {
+                    orphanDiv.title = `Orphan: Parent ID "${node.parentId}" not found\nDrag to tree to assign a new parent`;
+                }
+                
+                orphanDiv.onclick = () => selectNode(node);
+
+                if (selectedNode && selectedNode.id === node.id) {
+                    orphanDiv.classList.add('selected');
+                }
+
+                orphansList.appendChild(orphanDiv);
+            });
+        }
+
+        function selectNode(node) {
+            selectedNode = node;
+
+            // Re-render to update selection highlighting
+            renderTree();
+            renderOrphans();
+
+            // Update details panel
+            const detailsHeader = document.getElementById('detailsHeader');
+            const detailsContent = document.getElementById('detailsContent');
+
+            detailsHeader.textContent = `Selected: ${node.id}`;
+            detailsContent.innerHTML = '';
+
+            columns.forEach(col => {
+                const detailRow = document.createElement('div');
+                detailRow.className = 'detail-row';
+
+                const label = document.createElement('label');
+                label.textContent = col;
+                detailRow.appendChild(label);
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = node.row[col] || '';
+                input.onchange = (e) => {
+                    node.row[col] = e.target.value;
+                    rawRows[node.rowIndex][col] = e.target.value;
+                    
+                    // If we changed an ID field, rebuild
+                    if (col === nodeIdField || col === parentIdField || col === labelField) {
+                        buildHierarchyAndRender();
+                        // Try to reselect the same node
+                        const newNode = nodesById.get(node.id);
+                        if (newNode) {
+                            selectNode(newNode);
+                        }
+                    }
+                };
+
+                detailRow.appendChild(input);
+                detailsContent.appendChild(detailRow);
+            });
+        }
+
+        function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            
+            if (!query) {
+                // Empty query - just clear search silently
+                clearSearch();
+                return;
+            }
+
+            searchMatches.clear();
+
+            try {
+                const regex = new RegExp(query, 'i');
+                let matchCount = 0;
+
+                nodesById.forEach(node => {
+                    let matched = false;
+
+                    // Check Asset Number (Node ID)
+                    if (regex.test(node.id)) {
+                        matched = true;
+                    }
+
+                    // Check Asset Description (Label)
+                    if (!matched && regex.test(node.label)) {
+                        matched = true;
+                    }
+
+                    // Check all other fields in the row
+                    if (!matched) {
+                        for (const [key, value] of Object.entries(node.row)) {
+                            if (value && regex.test(String(value))) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (matched) {
+                        searchMatches.add(node.id);
+                        matchCount++;
+                    }
+                });
+
+                // Auto-expand paths to search results
+                if (searchMatches.size > 0) {
+                    expandPathsToMatches();
+                }
+
+                renderTree();
+                renderOrphans(); // Also filter orphans
+                document.getElementById('buildStatus').textContent = 
+                    `Search: ${matchCount} matches found (searching ID, Description, and all fields)`;
+
+            } catch (error) {
+                // Invalid regex - just show in status, don't alert
+                document.getElementById('buildStatus').textContent = 
+                    `Invalid search pattern`;
+            }
+        }
+
+        function expandPathsToMatches() {
+            // Expand all ancestor nodes of matched nodes
+            searchMatches.forEach(matchId => {
+                const node = nodesById.get(matchId);
+                if (node) {
+                    // Expand all ancestors
+                    let current = node;
+                    while (current) {
+                        if (current.parentId) {
+                            expandedNodes.add(current.parentId);
+                            current = nodesById.get(current.parentId);
+                        } else {
+                            break;
+                        }
+                    }
+                    // Also expand the matched node itself if it has children
+                    if (node.children.length > 0) {
+                        expandedNodes.add(node.id);
+                    }
+                }
+            });
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            searchMatches.clear();
+            renderTree();
+            renderOrphans(); // Reset orphans view
+            const totalInTree = nodesById.size - orphanNodes.length;
+            document.getElementById('buildStatus').textContent = 
+                `Built: ${roots.length} roots, ${totalInTree} nodes in tree, ${orphanNodes.length} orphans`;
+        }
+
+        function performOrphanSearch() {
+            const query = document.getElementById('orphanSearchInput').value.trim();
+            
+            if (!query) {
+                clearOrphanSearch();
+                return;
+            }
+
+            orphanSearchMatches.clear();
+
+            try {
+                const regex = new RegExp(query, 'i');
+                let matchCount = 0;
+
+                orphanNodes.forEach(node => {
+                    let matched = false;
+
+                    // Check Node ID
+                    if (regex.test(node.id)) {
+                        matched = true;
+                    }
+
+                    // Check Label
+                    if (!matched && regex.test(node.label)) {
+                        matched = true;
+                    }
+
+                    // Check all other fields
+                    if (!matched) {
+                        for (const [key, value] of Object.entries(node.row)) {
+                            if (value && regex.test(String(value))) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (matched) {
+                        orphanSearchMatches.add(node.id);
+                        matchCount++;
+                    }
+                });
+
+                renderOrphans();
+                
+                // Show status
+                const statusMsg = `Orphan Search: ${matchCount} match${matchCount !== 1 ? 'es' : ''} found`;
+                document.getElementById('orphanCount').textContent = statusMsg;
+                document.getElementById('orphanCount').style.background = matchCount > 0 ? '#ff9800' : '#f44336';
+
+            } catch (error) {
+                document.getElementById('orphanCount').textContent = 'Invalid search pattern';
+            }
+        }
+
+        function clearOrphanSearch() {
+            document.getElementById('orphanSearchInput').value = '';
+            orphanSearchMatches.clear();
+            renderOrphans();
+            document.getElementById('orphanCount').textContent = `${orphanNodes.length}`;
+            document.getElementById('orphanCount').style.background = '';
+        }
+
+        function expandAll() {
+            expandedNodes.clear();
+            nodesById.forEach(node => {
+                if (node.children.length > 0) {
+                    expandedNodes.add(node.id);
+                }
+            });
+            renderTree();
+        }
+
+        function collapseAll() {
+            expandedNodes.clear();
+            renderTree();
+        }
+
+        function createNewRecord() {
+            // Check if we have the required mapping
+            if (!nodeIdField || !parentIdField || !labelField) {
+                alert('Please map columns and build the tree first');
+                return;
+            }
+
+            // Get input values
+            const newId = sanitizeId(document.getElementById('newNodeId').value);
+            const newParentId = sanitizeId(document.getElementById('newParentId').value);
+            const newLabel = document.getElementById('newLabel').value.trim();
+
+            // Validate required fields
+            if (!newId) {
+                alert('Node ID is required');
+                return;
+            }
+
+            if (!newLabel) {
+                alert('Label/Description is required');
+                return;
+            }
+
+            // Check for duplicate ID
+            if (nodesById.has(newId)) {
+                alert(`Node ID "${newId}" already exists. Please use a unique ID.`);
+                return;
+            }
+
+            // Warn if parent doesn't exist
+            if (newParentId && !nodesById.has(newParentId)) {
+                if (!confirm(`Warning: Parent ID "${newParentId}" does not exist. This will create an orphan node.\n\nContinue anyway?`)) {
+                    return;
+                }
+            }
+
+            // Create a new row with all columns
+            const newRow = {};
+            columns.forEach(col => {
+                newRow[col] = ''; // Initialize all columns as empty
+            });
+
+            // Set the mapped fields
+            newRow[nodeIdField] = newId;
+            newRow[parentIdField] = newParentId || '';
+            newRow[labelField] = newLabel;
+
+            // Add to rawRows
+            rawRows.push(newRow);
+
+            // Clear the form
+            document.getElementById('newNodeId').value = '';
+            document.getElementById('newParentId').value = '';
+            document.getElementById('newLabel').value = '';
+
+            // Rebuild the tree
+            buildHierarchyAndRender();
+
+            // Auto-expand the parent node if it exists
+            if (newParentId) {
+                const parentNode = nodesById.get(newParentId);
+                if (parentNode && parentNode.children.length > 0) {
+                    expandedNodes.add(newParentId);
+                    renderTree();
+                    renderOrphans();
+                }
+            }
+
+            // Select the new node
+            const newNode = nodesById.get(newId);
+            if (newNode) {
+                selectNode(newNode);
+                
+                // Scroll to the newly created node
+                setTimeout(() => {
+                    // Find the node in the DOM and scroll to it
+                    const nodeElement = document.querySelector(`.tree-node[data-node-id="${newId}"], .orphan-node[data-node-id="${newId}"]`);
+                    if (nodeElement) {
+                        nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+                
+                // Determine where the node ended up
+                const isOrphan = orphanNodes.some(n => n.id === newId);
+                const isRoot = roots.some(n => n.id === newId);
+                
+                let message = `✓ Created new record: ${newId}. `;
+                if (isOrphan) {
+                    message += 'It appears in the Orphans panel. ';
+                } else if (isRoot) {
+                    message += 'It appears as a root node. ';
+                } else {
+                    message += 'It appears in the tree. ';
+                }
+                message += 'Fill in remaining fields on the right.';
+                
+                document.getElementById('buildStatus').textContent = message;
+            }
+        }
+
+        function useSelectedAsParent() {
+            if (!selectedNode) {
+                alert('Please select a node first');
+                return;
+            }
+            document.getElementById('newParentId').value = selectedNode.id;
+        }
+
+        // ===== DATA QUALITY ANALYSIS FUNCTIONS =====
+        
+        let qualityAnalysisResults = null;
+
+        function runDataQualityAnalysis() {
+            if (rawRows.length === 0) {
+                alert('Please load a file first');
+                return;
+            }
+
+            if (!nodeIdField || !parentIdField || !labelField) {
+                alert('Please map columns and build the tree first');
+                return;
+            }
+
+            // Run analysis
+            qualityAnalysisResults = {
+                duplicates: findDuplicates(),
+                orphans: analyzeOrphans(),
+                emptyFields: findEmptyFields(),
+                whitespaceIssues: findWhitespaceIssues(),
+                circularReferences: findCircularReferences(),
+                statistics: calculateStatistics()
+            };
+
+            // Render report
+            renderQualityReport();
+        }
+
+        function findDuplicates() {
+            const duplicates = [];
+            const idCounts = new Map();
+            
+            rawRows.forEach((row, index) => {
+                const id = sanitizeId(row[nodeIdField]);
+                if (!id) return;
+                
+                if (!idCounts.has(id)) {
+                    idCounts.set(id, []);
+                }
+                idCounts.get(id).push(index + 2); // +2 for Excel row (1-indexed + header)
+            });
+
+            idCounts.forEach((rows, id) => {
+                if (rows.length > 1) {
+                    duplicates.push({
+                        id: id,
+                        count: rows.length,
+                        rows: rows
+                    });
+                }
+            });
+
+            return duplicates;
+        }
+
+        function analyzeOrphans() {
+            const orphanInfo = [];
+            const parentsMissing = new Map();
+
+            orphanNodes.forEach(node => {
+                if (node.parentId) {
+                    // Parent doesn't exist
+                    if (!parentsMissing.has(node.parentId)) {
+                        parentsMissing.set(node.parentId, []);
+                    }
+                    parentsMissing.get(node.parentId).push(node.id);
+                } else {
+                    // No parent specified (isolated node)
+                    orphanInfo.push({
+                        type: 'isolated',
+                        nodeId: node.id,
+                        message: 'No parent and no children'
+                    });
+                }
+            });
+
+            // Add missing parent info
+            parentsMissing.forEach((childIds, parentId) => {
+                orphanInfo.push({
+                    type: 'missing_parent',
+                    parentId: parentId,
+                    childIds: childIds,
+                    count: childIds.length,
+                    message: `Parent "${parentId}" not found (${childIds.length} orphan${childIds.length > 1 ? 's' : ''})`
+                });
+            });
+
+            return orphanInfo;
+        }
+
+        function findEmptyFields() {
+            const issues = [];
+            
+            rawRows.forEach((row, index) => {
+                const nodeId = sanitizeId(row[nodeIdField]);
+                const label = row[labelField];
+                
+                if (!nodeId) {
+                    issues.push({
+                        type: 'empty_id',
+                        row: index + 2,
+                        message: `Row ${index + 2}: Missing Node ID`
+                    });
+                }
+                
+                if (!label || label.trim() === '') {
+                    issues.push({
+                        type: 'empty_label',
+                        nodeId: nodeId || `Row ${index + 2}`,
+                        row: index + 2,
+                        message: `${nodeId || 'Row ' + (index + 2)}: Missing Label`
+                    });
+                }
+            });
+
+            return issues;
+        }
+
+        function findWhitespaceIssues() {
+            const issues = [];
+            
+            rawRows.forEach((row, index) => {
+                const rawNodeId = row[nodeIdField];
+                const rawParentId = row[parentIdField];
+                
+                if (rawNodeId && rawNodeId !== rawNodeId.trim()) {
+                    issues.push({
+                        type: 'whitespace',
+                        field: 'nodeId',
+                        nodeId: rawNodeId,
+                        row: index + 2,
+                        rowIndex: index,
+                        message: `"${rawNodeId}" has leading/trailing spaces`
+                    });
+                }
+                
+                if (rawParentId && rawParentId !== rawParentId.trim()) {
+                    issues.push({
+                        type: 'whitespace',
+                        field: 'parentId',
+                        nodeId: rawNodeId,
+                        row: index + 2,
+                        rowIndex: index,
+                        message: `Parent ID "${rawParentId}" has leading/trailing spaces`
+                    });
+                }
+            });
+
+            return issues;
+        }
+
+        function findCircularReferences() {
+            const circular = [];
+            
+            nodesById.forEach(node => {
+                const visited = new Set();
+                let current = node;
+                const path = [];
+                
+                while (current) {
+                    if (visited.has(current.id)) {
+                        // Found circular reference
+                        const circleStart = path.indexOf(current.id);
+                        if (circleStart !== -1) {
+                            const circle = path.slice(circleStart);
+                            circle.push(current.id);
+                            circular.push({
+                                chain: circle.join(' → '),
+                                nodes: circle
+                            });
+                        }
+                        break;
+                    }
+                    
+                    visited.add(current.id);
+                    path.push(current.id);
+                    
+                    if (current.parentId) {
+                        current = nodesById.get(current.parentId);
+                    } else {
+                        break;
+                    }
+                }
+            });
+
+            // Remove duplicates
+            const unique = [];
+            const seen = new Set();
+            circular.forEach(item => {
+                const key = item.chain;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    unique.push(item);
+                }
+            });
+
+            return unique;
+        }
+
+        function calculateStatistics() {
+            const stats = {
+                totalRecords: rawRows.length,
+                validNodes: nodesById.size,
+                rootNodes: roots.length,
+                orphanNodes: orphanNodes.length,
+                nodesInTree: nodesById.size - orphanNodes.length
+            };
+
+            // Calculate max depth
+            function getDepth(node, depth = 0) {
+                if (node.children.length === 0) return depth;
+                return Math.max(...node.children.map(child => getDepth(child, depth + 1)));
+            }
+
+            stats.maxDepth = roots.length > 0 ? Math.max(...roots.map(root => getDepth(root) + 1)) : 0;
+
+            // Calculate average children
+            let totalChildren = 0;
+            let nodesWithChildren = 0;
+            nodesById.forEach(node => {
+                if (node.children.length > 0) {
+                    totalChildren += node.children.length;
+                    nodesWithChildren++;
+                }
+            });
+            stats.avgChildren = nodesWithChildren > 0 ? (totalChildren / nodesWithChildren).toFixed(1) : 0;
+
+            return stats;
+        }
+
+        function renderQualityReport() {
+            const reportDiv = document.getElementById('qualityReport');
+            if (!qualityAnalysisResults) {
+                reportDiv.innerHTML = '<div class="status">No analysis run yet</div>';
+                return;
+            }
+
+            const r = qualityAnalysisResults;
+            let html = '';
+
+            // Calculate quality score
+            const totalIssues = r.duplicates.length + r.orphans.length + r.emptyFields.length + 
+                               r.whitespaceIssues.length + r.circularReferences.length;
+            const score = Math.max(0, 100 - (totalIssues * 2));
+            const scoreClass = score >= 90 ? 'success' : score >= 70 ? 'info' : score >= 50 ? 'warning' : 'critical';
+
+            // Quality Score
+            html += `
+                <div class="quality-score">
+                    <div>Data Quality Score</div>
+                    <div class="quality-score-value">${score}/100</div>
+                    <div>${score >= 90 ? '⭐⭐⭐⭐⭐ Excellent' : score >= 70 ? '⭐⭐⭐⭐ Good' : score >= 50 ? '⭐⭐⭐ Fair' : '⭐⭐ Needs Work'}</div>
+                </div>
+            `;
+
+            // Critical Issues
+            const criticalCount = r.duplicates.length + r.circularReferences.length + 
+                                 r.emptyFields.filter(e => e.type === 'empty_id').length;
+            
+            if (criticalCount > 0) {
+                html += `<div class="quality-section critical">
+                    <div class="quality-section-header">
+                        <span class="icon">🔴</span>
+                        <span>Critical Issues</span>
+                        <span class="count">${criticalCount}</span>
+                    </div>`;
+
+                // Duplicates
+                if (r.duplicates.length > 0) {
+                    html += `<div class="quality-issue-title" style="margin-top:8px;">• ${r.duplicates.length} Duplicate Node ID${r.duplicates.length > 1 ? 's' : ''}</div>`;
+                    r.duplicates.slice(0, 3).forEach(dup => {
+                        html += `<div class="quality-issue" onclick="jumpToNodeById('${dup.id}')">
+                            <div class="quality-issue-title">"${dup.id}"</div>
+                            <div class="quality-issue-detail">Appears ${dup.count} times (rows: ${dup.rows.join(', ')})</div>
+                        </div>`;
+                    });
+                    if (r.duplicates.length > 3) {
+                        html += `<div class="quality-issue-detail" style="padding-left:8px;">... and ${r.duplicates.length - 3} more</div>`;
+                    }
+                }
+
+                // Circular References
+                if (r.circularReferences.length > 0) {
+                    html += `<div class="quality-issue-title" style="margin-top:8px;">• ${r.circularReferences.length} Circular Reference${r.circularReferences.length > 1 ? 's' : ''}</div>`;
+                    r.circularReferences.slice(0, 2).forEach(circ => {
+                        html += `<div class="quality-issue" onclick="jumpToNodeById('${circ.nodes[0]}')">
+                            <div class="quality-issue-detail">${circ.chain}</div>
+                        </div>`;
+                    });
+                }
+
+                // Empty IDs
+                const emptyIds = r.emptyFields.filter(e => e.type === 'empty_id');
+                if (emptyIds.length > 0) {
+                    html += `<div class="quality-issue-title" style="margin-top:8px;">• ${emptyIds.length} Row${emptyIds.length > 1 ? 's' : ''} with Missing Node ID</div>`;
+                }
+
+                html += `</div>`;
+            }
+
+            // Warnings
+            const warningCount = r.orphans.length + r.whitespaceIssues.length + 
+                                r.emptyFields.filter(e => e.type === 'empty_label').length;
+            
+            if (warningCount > 0) {
+                html += `<div class="quality-section warning">
+                    <div class="quality-section-header">
+                        <span class="icon">⚠️</span>
+                        <span>Warnings</span>
+                        <span class="count">${warningCount}</span>
+                    </div>`;
+
+                // Orphans
+                if (r.orphans.length > 0) {
+                    const missingParents = r.orphans.filter(o => o.type === 'missing_parent');
+                    const isolated = r.orphans.filter(o => o.type === 'isolated');
+                    
+                    html += `<div class="quality-issue-title" style="margin-top:8px;">• ${r.orphans.length} Orphan Node${r.orphans.length > 1 ? 's' : ''}</div>`;
+                    
+                    missingParents.slice(0, 3).forEach(orphan => {
+                        html += `<div class="quality-issue">
+                            <div class="quality-issue-detail">${orphan.message}</div>
+                            <div class="quality-issue-detail">Children: ${orphan.childIds.slice(0, 3).join(', ')}${orphan.childIds.length > 3 ? '...' : ''}</div>
+                        </div>`;
+                    });
+                }
+
+                // Whitespace Issues
+                if (r.whitespaceIssues.length > 0) {
+                    html += `<div class="quality-issue-title" style="margin-top:8px;">• ${r.whitespaceIssues.length} Whitespace Issue${r.whitespaceIssues.length > 1 ? 's' : ''}</div>`;
+                    r.whitespaceIssues.slice(0, 3).forEach(issue => {
+                        html += `<div class="quality-issue">
+                            <div class="quality-issue-detail">${issue.message}</div>
+                        </div>`;
+                    });
+                    if (r.whitespaceIssues.length > 0) {
+                        html += `<div class="quality-actions">
+                            <button onclick="fixAllWhitespace()" style="background:#ff9800;">Fix All Whitespace</button>
+                        </div>`;
+                    }
+                }
+
+                html += `</div>`;
+            }
+
+            // Statistics
+            html += `<div class="quality-section info">
+                <div class="quality-section-header">
+                    <span class="icon">ℹ️</span>
+                    <span>Statistics</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Total Records:</span>
+                    <span class="quality-stat-value">${r.statistics.totalRecords}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Valid Nodes:</span>
+                    <span class="quality-stat-value">${r.statistics.validNodes}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Root Nodes:</span>
+                    <span class="quality-stat-value">${r.statistics.rootNodes}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Nodes in Tree:</span>
+                    <span class="quality-stat-value">${r.statistics.nodesInTree}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Orphan Nodes:</span>
+                    <span class="quality-stat-value">${r.statistics.orphanNodes}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Max Tree Depth:</span>
+                    <span class="quality-stat-value">${r.statistics.maxDepth} level${r.statistics.maxDepth !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="quality-stat">
+                    <span class="quality-stat-label">Avg Children/Parent:</span>
+                    <span class="quality-stat-value">${r.statistics.avgChildren}</span>
+                </div>
+            </div>`;
+
+            // Export Report Button
+            html += `<div class="quality-actions">
+                <button onclick="exportQualityReport()" style="background:#2196F3;">Export Report</button>
+            </div>`;
+
+            reportDiv.innerHTML = html;
+        }
+
+        function jumpToNodeById(nodeId) {
+            const node = nodesById.get(nodeId);
+            if (!node) {
+                alert(`Node "${nodeId}" not found in tree`);
+                return;
+            }
+
+            // Expand path to node
+            let current = node;
+            while (current) {
+                if (current.parentId) {
+                    expandedNodes.add(current.parentId);
+                    current = nodesById.get(current.parentId);
+                } else {
+                    break;
+                }
+            }
+
+            // Clear search and render
+            clearSearch();
+            selectNode(node);
+
+            // Scroll to node
+            setTimeout(() => {
+                const nodeElement = document.querySelector(`.tree-node[data-node-id="${nodeId}"], .orphan-node[data-node-id="${nodeId}"]`);
+                if (nodeElement) {
+                    nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        function fixAllWhitespace() {
+            if (!qualityAnalysisResults || qualityAnalysisResults.whitespaceIssues.length === 0) {
+                return;
+            }
+
+            let fixedCount = 0;
+            qualityAnalysisResults.whitespaceIssues.forEach(issue => {
+                const row = rawRows[issue.rowIndex];
+                if (issue.field === 'nodeId' && row[nodeIdField]) {
+                    row[nodeIdField] = row[nodeIdField].trim();
+                    fixedCount++;
+                }
+                if (issue.field === 'parentId' && row[parentIdField]) {
+                    row[parentIdField] = row[parentIdField].trim();
+                    fixedCount++;
+                }
+            });
+
+            alert(`Fixed ${fixedCount} whitespace issue${fixedCount !== 1 ? 's' : ''}!`);
+            
+            // Rebuild tree and re-run analysis
+            buildHierarchyAndRender();
+            runDataQualityAnalysis();
+        }
+
+        function exportQualityReport() {
+            if (!qualityAnalysisResults) {
+                alert('Please run analysis first');
+                return;
+            }
+
+            const r = qualityAnalysisResults;
+            let report = 'DATA QUALITY REPORT\n';
+            report += '===================\n\n';
+            report += `Generated: ${new Date().toLocaleString()}\n`;
+            report += `File: ${fileName}\n\n`;
+
+            // Score
+            const totalIssues = r.duplicates.length + r.orphans.length + r.emptyFields.length + 
+                               r.whitespaceIssues.length + r.circularReferences.length;
+            const score = Math.max(0, 100 - (totalIssues * 2));
+            report += `QUALITY SCORE: ${score}/100\n\n`;
+
+            // Critical Issues
+            report += 'CRITICAL ISSUES:\n';
+            report += '----------------\n';
+            if (r.duplicates.length > 0) {
+                report += `\nDuplicate Node IDs (${r.duplicates.length}):\n`;
+                r.duplicates.forEach(dup => {
+                    report += `  - "${dup.id}" appears ${dup.count} times (rows: ${dup.rows.join(', ')})\n`;
+                });
+            }
+            if (r.circularReferences.length > 0) {
+                report += `\nCircular References (${r.circularReferences.length}):\n`;
+                r.circularReferences.forEach(circ => {
+                    report += `  - ${circ.chain}\n`;
+                });
+            }
+            if (r.emptyFields.filter(e => e.type === 'empty_id').length > 0) {
+                report += `\nMissing Node IDs:\n`;
+                r.emptyFields.filter(e => e.type === 'empty_id').forEach(issue => {
+                    report += `  - ${issue.message}\n`;
+                });
+            }
+
+            // Warnings
+            report += '\n\nWARNINGS:\n';
+            report += '---------\n';
+            if (r.orphans.length > 0) {
+                report += `\nOrphan Nodes (${r.orphans.length}):\n`;
+                r.orphans.forEach(orphan => {
+                    if (orphan.type === 'missing_parent') {
+                        report += `  - Parent "${orphan.parentId}" not found (${orphan.count} orphans)\n`;
+                    } else {
+                        report += `  - "${orphan.nodeId}" is isolated (no parent, no children)\n`;
+                    }
+                });
+            }
+            if (r.whitespaceIssues.length > 0) {
+                report += `\nWhitespace Issues (${r.whitespaceIssues.length}):\n`;
+                r.whitespaceIssues.forEach(issue => {
+                    report += `  - Row ${issue.row}: ${issue.message}\n`;
+                });
+            }
+
+            // Statistics
+            report += '\n\nSTATISTICS:\n';
+            report += '-----------\n';
+            report += `Total Records: ${r.statistics.totalRecords}\n`;
+            report += `Valid Nodes: ${r.statistics.validNodes}\n`;
+            report += `Root Nodes: ${r.statistics.rootNodes}\n`;
+            report += `Nodes in Tree: ${r.statistics.nodesInTree}\n`;
+            report += `Orphan Nodes: ${r.statistics.orphanNodes}\n`;
+            report += `Max Tree Depth: ${r.statistics.maxDepth} levels\n`;
+            report += `Avg Children per Parent: ${r.statistics.avgChildren}\n`;
+
+            // Download as text file
+            const blob = new Blob([report], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName.replace(/\.xlsx?$/i, '_quality_report.txt');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            alert('Quality report exported successfully!');
+        }
+
+        // ===== END DATA QUALITY ANALYSIS =====
+
+        function analyzeDataQuality() {
+            if (rawRows.length === 0) {
+                document.getElementById('qualityReport').innerHTML = 
+                    '<div class="status">Please load a file first</div>';
+                return;
+            }
+
+            if (!nodeIdField || !parentIdField || !labelField) {
+                document.getElementById('qualityReport').innerHTML = 
+                    '<div class="status">Please map columns first</div>';
+                return;
+            }
+
+            const issues = {
+                duplicates: [],
+                missingParents: [],
+                emptyNodeIds: [],
+                emptyLabels: [],
+                whitespaceIssues: [],
+                circularRefs: [],
+                stats: {}
+            };
+
+            // Track all IDs and their occurrences
+            const idCounts = new Map();
+            const parentIds = new Set();
+
+            // First pass: collect all IDs and count occurrences
+            rawRows.forEach((row, index) => {
+                const id = sanitizeId(row[nodeIdField]);
+                const parentId = sanitizeId(row[parentIdField]);
+                const label = row[labelField];
+
+                // Check for empty Node IDs
+                if (!id) {
+                    issues.emptyNodeIds.push({ row: index + 1, data: row });
+                    return;
+                }
+
+                // Count ID occurrences
+                if (!idCounts.has(id)) {
+                    idCounts.set(id, []);
+                }
+                idCounts.get(id).push(index + 1);
+
+                // Collect parent IDs
+                if (parentId) {
+                    parentIds.add(parentId);
+                }
+
+                // Check for empty labels
+                if (!label || label.trim() === '') {
+                    issues.emptyLabels.push({ id, row: index + 1 });
+                }
+
+                // Check for whitespace issues
+                const rawId = row[nodeIdField];
+                const rawParentId = row[parentIdField];
+                if (rawId && rawId !== rawId.trim()) {
+                    issues.whitespaceIssues.push({ 
+                        id, 
+                        field: 'Node ID', 
+                        row: index + 1,
+                        original: rawId 
+                    });
+                }
+                if (rawParentId && rawParentId !== rawParentId.trim()) {
+                    issues.whitespaceIssues.push({ 
+                        id, 
+                        field: 'Parent ID', 
+                        row: index + 1,
+                        original: rawParentId 
+                    });
+                }
+            });
+
+            // Find duplicates
+            idCounts.forEach((rows, id) => {
+                if (rows.length > 1) {
+                    issues.duplicates.push({ id, rows });
+                }
+            });
+
+            // Find missing parents (orphans)
+            parentIds.forEach(parentId => {
+                if (!nodesById.has(parentId)) {
+                    const affectedNodes = [];
+                    nodesById.forEach(node => {
+                        if (node.parentId === parentId) {
+                            affectedNodes.push(node.id);
+                        }
+                    });
+                    issues.missingParents.push({ 
+                        parentId, 
+                        affectedNodes 
+                    });
+                }
+            });
+
+            // Calculate statistics
+            issues.stats = {
+                totalRecords: rawRows.length,
+                validNodes: nodesById.size,
+                roots: roots.length,
+                orphans: orphanNodes.length,
+                maxDepth: calculateMaxDepth(),
+                avgChildren: calculateAvgChildren()
+            };
+
+            // Render the report
+            renderQualityReport(issues);
+        }
+
+        function calculateMaxDepth() {
+            let maxDepth = 0;
+            
+            function getDepth(node, currentDepth = 1) {
+                if (node.children.length === 0) {
+                    return currentDepth;
+                }
+                let max = currentDepth;
+                node.children.forEach(child => {
+                    max = Math.max(max, getDepth(child, currentDepth + 1));
+                });
+                return max;
+            }
+
+            roots.forEach(root => {
+                maxDepth = Math.max(maxDepth, getDepth(root));
+            });
+
+            return maxDepth;
+        }
+
+        function calculateAvgChildren() {
+            let totalChildren = 0;
+            let nodesWithChildren = 0;
+
+            nodesById.forEach(node => {
+                if (node.children.length > 0) {
+                    totalChildren += node.children.length;
+                    nodesWithChildren++;
+                }
+            });
+
+            return nodesWithChildren > 0 
+                ? (totalChildren / nodesWithChildren).toFixed(1) 
+                : 0;
+        }
+
+        function renderQualityReport(issues) {
+            const report = document.getElementById('qualityReport');
+            let html = '';
+
+            // Overall summary
+            const totalIssues = issues.duplicates.length + 
+                               issues.missingParents.length + 
+                               issues.emptyNodeIds.length + 
+                               issues.emptyLabels.length + 
+                               issues.whitespaceIssues.length;
+
+            if (totalIssues === 0) {
+                html += `
+                    <div class="quality-section success">
+                        <div class="quality-header">
+                            ✓ No Issues Found!
+                        </div>
+                        <div>Your data looks great!</div>
+                    </div>
+                `;
+            }
+
+            // Critical Issues
+            const criticalCount = issues.duplicates.length + issues.emptyNodeIds.length;
+            if (criticalCount > 0) {
+                html += `
+                    <div class="quality-section critical">
+                        <div class="quality-header">
+                            🔴 Critical Issues <span class="quality-count">${criticalCount}</span>
+                        </div>
+                `;
+
+                if (issues.duplicates.length > 0) {
+                    html += `<div style="margin-top: 8px;"><strong>${issues.duplicates.length} Duplicate Node IDs</strong></div>`;
+                    issues.duplicates.slice(0, 5).forEach(dup => {
+                        html += `
+                            <div class="quality-item" onclick="jumpToNode('${dup.id}')">
+                                • "<span class="quality-item-clickable">${dup.id}</span>" appears ${dup.rows.length} times 
+                                (rows: ${dup.rows.join(', ')})
+                            </div>
+                        `;
+                    });
+                    if (issues.duplicates.length > 5) {
+                        html += `<div class="quality-item">... and ${issues.duplicates.length - 5} more</div>`;
+                    }
+                }
+
+                if (issues.emptyNodeIds.length > 0) {
+                    html += `
+                        <div style="margin-top: 8px;"><strong>${issues.emptyNodeIds.length} Empty Node IDs</strong></div>
+                        <div class="quality-item">
+                            Rows: ${issues.emptyNodeIds.slice(0, 10).map(e => e.row).join(', ')}
+                            ${issues.emptyNodeIds.length > 10 ? '...' : ''}
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+            }
+
+            // Warnings
+            const warningCount = issues.missingParents.length + 
+                                issues.emptyLabels.length + 
+                                issues.whitespaceIssues.length;
+            if (warningCount > 0) {
+                html += `
+                    <div class="quality-section warning">
+                        <div class="quality-header">
+                            ⚠️ Warnings <span class="quality-count">${warningCount}</span>
+                        </div>
+                `;
+
+                if (issues.missingParents.length > 0) {
+                    const orphanCount = issues.missingParents.reduce((sum, mp) => sum + mp.affectedNodes.length, 0);
+                    html += `
+                        <div style="margin-top: 8px;"><strong>${orphanCount} Orphan Nodes (missing parents)</strong></div>
+                    `;
+                    issues.missingParents.slice(0, 3).forEach(mp => {
+                        html += `
+                            <div class="quality-item">
+                                • Parent "<strong>${mp.parentId}</strong>" not found 
+                                (affects ${mp.affectedNodes.length} nodes)
+                            </div>
+                        `;
+                    });
+                    if (issues.missingParents.length > 3) {
+                        html += `<div class="quality-item">... and ${issues.missingParents.length - 3} more missing parents</div>`;
+                    }
+                }
+
+                if (issues.emptyLabels.length > 0) {
+                    html += `
+                        <div style="margin-top: 8px;"><strong>${issues.emptyLabels.length} Empty Labels</strong></div>
+                        <div class="quality-item">
+                            First few: ${issues.emptyLabels.slice(0, 5).map(e => e.id).join(', ')}
+                            ${issues.emptyLabels.length > 5 ? '...' : ''}
+                        </div>
+                    `;
+                }
+
+                if (issues.whitespaceIssues.length > 0) {
+                    html += `
+                        <div style="margin-top: 8px;"><strong>${issues.whitespaceIssues.length} Whitespace Issues</strong></div>
+                    `;
+                    issues.whitespaceIssues.slice(0, 3).forEach(ws => {
+                        html += `
+                            <div class="quality-item" onclick="jumpToNode('${ws.id}')">
+                                • <span class="quality-item-clickable">${ws.id}</span> - ${ws.field} has extra spaces
+                            </div>
+                        `;
+                    });
+                    if (issues.whitespaceIssues.length > 3) {
+                        html += `<div class="quality-item">... and ${issues.whitespaceIssues.length - 3} more</div>`;
+                    }
+                    html += `
+                        <div style="margin-top: 8px;">
+                            <span class="quality-action-btn" onclick="fixWhitespaceIssues()">Fix All Whitespace</span>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+            }
+
+            // Statistics
+            html += `
+                <div class="quality-section info">
+                    <div class="quality-header">
+                        ℹ️ Statistics
+                    </div>
+                    <div class="quality-stats">
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.totalRecords}</div>
+                            <div class="quality-stat-label">Total Records</div>
+                        </div>
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.roots}</div>
+                            <div class="quality-stat-label">Root Nodes</div>
+                        </div>
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.orphans}</div>
+                            <div class="quality-stat-label">Orphans</div>
+                        </div>
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.maxDepth}</div>
+                            <div class="quality-stat-label">Max Depth</div>
+                        </div>
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.avgChildren}</div>
+                            <div class="quality-stat-label">Avg Children</div>
+                        </div>
+                        <div class="quality-stat">
+                            <div class="quality-stat-value">${issues.stats.validNodes}</div>
+                            <div class="quality-stat-label">Valid Nodes</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Export button
+            html += `
+                <div style="margin-top: 10px;">
+                    <span class="quality-action-btn" onclick="exportQualityReport()">📄 Export Report</span>
+                </div>
+            `;
+
+            report.innerHTML = html;
+        }
+
+        function jumpToNode(nodeId) {
+            const node = nodesById.get(nodeId);
+            if (node) {
+                // Expand ancestors
+                let current = node;
+                while (current && current.parentId) {
+                    expandedNodes.add(current.parentId);
+                    current = nodesById.get(current.parentId);
+                }
+
+                // Render and select
+                renderTree();
+                renderOrphans();
+                selectNode(node);
+
+                // Scroll to node
+                setTimeout(() => {
+                    const nodeElement = document.querySelector(`.tree-node[data-node-id="${nodeId}"], .orphan-node[data-node-id="${nodeId}"]`);
+                    if (nodeElement) {
+                        nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+
+                document.getElementById('buildStatus').textContent = `Jumped to node: ${nodeId}`;
+            }
+        }
+
+        function fixWhitespaceIssues() {
+            let fixedCount = 0;
+
+            rawRows.forEach((row, index) => {
+                // Fix Node ID
+                if (row[nodeIdField] && row[nodeIdField] !== row[nodeIdField].trim()) {
+                    row[nodeIdField] = row[nodeIdField].trim();
+                    fixedCount++;
+                }
+                // Fix Parent ID
+                if (row[parentIdField] && row[parentIdField] !== row[parentIdField].trim()) {
+                    row[parentIdField] = row[parentIdField].trim();
+                    fixedCount++;
+                }
+                // Fix Label
+                if (row[labelField] && row[labelField] !== row[labelField].trim()) {
+                    row[labelField] = row[labelField].trim();
+                    fixedCount++;
+                }
+            });
+
+            if (fixedCount > 0) {
+                // Rebuild tree
+                buildHierarchyAndRender();
+                // Re-run analysis
+                analyzeDataQuality();
+                document.getElementById('buildStatus').textContent = 
+                    `✓ Fixed ${fixedCount} whitespace issues`;
+            } else {
+                document.getElementById('buildStatus').textContent = 'No whitespace issues to fix';
+            }
+        }
+
+        function exportQualityReport() {
+            // Create a simple text report
+            let reportText = 'DATA QUALITY REPORT\n';
+            reportText += '===================\n\n';
+            reportText += `Generated: ${new Date().toLocaleString()}\n`;
+            reportText += `File: ${fileName}\n\n`;
+
+            // Re-run analysis to get current data
+            analyzeDataQuality();
+
+            // This would need to access the issues data - for now, show a message
+            alert('Quality report export feature - would export detailed report to text file');
+            document.getElementById('buildStatus').textContent = 'Report export prepared';
+        }
+
+        function exportToExcel() {
+            if (rawRows.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            try {
+                const worksheet = XLSX.utils.json_to_sheet(rawRows);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+                const exportFileName = fileName.replace(/\.xlsx?$/i, '_updated.xlsx');
+                XLSX.writeFile(workbook, exportFileName);
+
+                alert('File exported successfully as: ' + exportFileName);
+            } catch (error) {
+                alert('Error exporting file: ' + error.message);
+            }
+        }
+
+        // Event listeners for mapping changes
+        document.getElementById('nodeIdSelect').addEventListener('change', function(e) {
+            nodeIdField = e.target.value;
+        });
+
+        document.getElementById('parentIdSelect').addEventListener('change', function(e) {
+            parentIdField = e.target.value;
+        });
+
+        document.getElementById('labelSelect').addEventListener('change', function(e) {
+            labelField = e.target.value;
+        });
+
+        // Search on Enter key
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Live search as user types (with small delay to avoid too many searches)
+        let searchTimeout = null;
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (query === '') {
+                // If search is cleared, clear the search immediately
+                clearSearch();
+            } else {
+                // Delay search by 300ms to avoid searching on every keystroke
+                searchTimeout = setTimeout(() => {
+                    performSearch();
+                }, 300);
+            }
+        });
+
+        // Orphan search event listeners
+        document.getElementById('orphanSearchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performOrphanSearch();
+            }
+        });
+
+        let orphanSearchTimeout = null;
+        document.getElementById('orphanSearchInput').addEventListener('input', function(e) {
+            clearTimeout(orphanSearchTimeout);
+            const query = e.target.value.trim();
+            
+            if (query === '') {
+                clearOrphanSearch();
+            } else {
+                orphanSearchTimeout = setTimeout(() => {
+                    performOrphanSearch();
+                }, 300);
+            }
+        });
+
+        // Enter key support for new record creation
+        ['newNodeId', 'newParentId', 'newLabel'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        createNewRecord();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
